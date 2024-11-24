@@ -1,0 +1,113 @@
+﻿@page
+@model IndexModel
+@{
+    ViewData["Title"] = "Board";
+}
+
+<canvas id="whiteboard" width="800" height="600"></canvas>
+  
+@section Styles
+{
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f5f5f5;
+        }
+        canvas {
+            border: 2px solid #000;
+            background-color: #fff;
+        }
+    </style>
+}
+
+@section Scripts
+{
+    <script>
+
+              // Establish a connection to the SignalR hub at the specified URL
+        const connection = new signalR.HubConnectionBuilder()
+                            .withUrl("/board")
+                            .build();
+
+        // Start the SignalR connection and handle any errors
+        connection.start().catch(err => console.error(err.toString()));
+
+        // Canvas and Drawing Context Setup
+        const whiteboardCanvas = document.getElementById('whiteboard');
+        const drawingContext = whiteboardCanvas.getContext('2d');
+
+        // Drawing state variables to track if the user is drawing and the previous point
+        let isDrawing = false;
+        let previousX = 0;
+        let previousY = 0;
+
+        // Set up the drawing style once for all lines
+        function setDrawingStyle() {
+            drawingContext.lineWidth = 5;
+            drawingContext.lineCap = 'round';
+            drawingContext.strokeStyle = '#000000';
+        }
+
+        // Function to start drawing, triggered on mouse down
+        function startDrawing(event) {
+            isDrawing = true;
+            // Set the starting point for drawing based on mouse position relative to canvas
+            previousX = event.clientX - whiteboardCanvas.offsetLeft;
+            previousY = event.clientY - whiteboardCanvas.offsetTop;
+        }
+
+        // Function to stop drawing, triggered on mouse up
+        function stopDrawing() {
+            isDrawing = false;
+            drawingContext.beginPath(); // Reset the drawing path to avoid connecting segments unintentionally
+        }
+
+        // Core drawing function, triggered on mouse move while isDrawing is true
+        function drawLine(event) {
+            if (!isDrawing) return; // Exit if the mouse isn't pressed
+
+            // Calculate the current mouse position relative to the canvas
+            const currentX = event.clientX - whiteboardCanvas.offsetLeft;
+            const currentY = event.clientY - whiteboardCanvas.offsetTop;
+
+            // Set the drawing style
+            setDrawingStyle();
+
+            // Draw a line from the previous position to the current position
+            drawingContext.lineTo(currentX, currentY);
+            drawingContext.stroke();
+            drawingContext.beginPath();
+            drawingContext.moveTo(currentX, currentY);
+
+            // Broadcast the line segment to other users via SignalR
+            connection.invoke("DrawingAsync", previousX, previousY, currentX, currentY)
+                .catch(err => console.error(err.toString()));
+
+            // Update the previous position to the current position for continuous drawing
+            previousX = currentX;
+            previousY = currentY;
+        }
+
+        // Event listeners to handle mouse interactions with the canvas
+        whiteboardCanvas.addEventListener('mousedown', startDrawing);
+        whiteboardCanvas.addEventListener('mouseup', stopDrawing);
+        whiteboardCanvas.addEventListener('mousemove', drawLine);
+
+        // SignalR event handler for receiving drawing data from other users
+        connection.on("OnDrawingAsync", (startX, startY, endX, endY) => {
+            setDrawingStyle();
+
+            // Draw the received line segment on the canvas
+            drawingContext.beginPath();
+            drawingContext.moveTo(startX, startY);
+            drawingContext.lineTo(endX, endY);
+            drawingContext.stroke();
+            drawingContext.closePath();
+        });
+
+    </script>
+}
