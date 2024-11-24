@@ -12,7 +12,7 @@ if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error");
 }
-app.UseStaticFiles();
+app.UseStaticFiles(); 
 
 app.UseRouting();
 
